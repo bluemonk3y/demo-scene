@@ -1,14 +1,15 @@
 package io.confluent.kpay;
 
 import io.confluent.kpay.utils.IntegrationTestHarness;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
 public class RestEndpointIntegrationTest {
 
@@ -23,9 +24,9 @@ public class RestEndpointIntegrationTest {
     @Before
     public void before() throws Exception {
         testHarness = new IntegrationTestHarness();
-        testHarness.start();
+        testHarness.start("localhost:9092");
 
-        System.setProperty("bootstrap.servers", testHarness.embeddedKafkaCluster.bootstrapServers());
+        System.setProperty("bootstrap.servers", testHarness.bootstrapServers());
 
         System.setProperty("kpay.resources.folder", "src/main/resources");
 

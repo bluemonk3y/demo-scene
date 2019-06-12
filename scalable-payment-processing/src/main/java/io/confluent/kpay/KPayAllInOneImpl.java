@@ -1,5 +1,7 @@
 package io.confluent.kpay;
 
+import com.landoop.lenses.topology.client.TopologyClient;
+import com.landoop.lenses.topology.client.kafka.metrics.MicroserviceTopology;
 import io.confluent.common.utils.TestUtils;
 import io.confluent.kpay.control.ControlProperties;
 import io.confluent.kpay.control.Controllable;
@@ -20,14 +22,6 @@ import io.confluent.kpay.rest_iq.WindowKTableResourceEndpoint;
 import io.confluent.kpay.util.KafkaTopicClient;
 import io.confluent.kpay.util.KafkaTopicClientImpl;
 import io.confluent.kpay.util.Pair;
-import java.math.BigDecimal;
-import java.net.UnknownHostException;
-import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -38,6 +32,23 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.sort;
 
@@ -86,27 +97,27 @@ public class KPayAllInOneImpl implements KPay {
     }
 
     private void startController(Controllable pauseController) {
-        controllerStartStop = new StartStopController(ControlProperties.controlStatusTopic, ControlProperties.get(bootstrapServers), pauseController);
+        controllerStartStop = new StartStopController(ControlProperties.controlStatusTopic, ControlProperties.get(StartStopController.class.getSimpleName(), bootstrapServers), pauseController);
         controllerStartStop.start();
     }
 
     private int instrumentationPortOffset = 21000;
 
     private void startInstrumentation() {
-        instrumentationThroughput = new PaymentsThroughput(PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(bootstrapServers, instrumentationPortOffset++));
+        instrumentationThroughput = new PaymentsThroughput(PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(PaymentsThroughput.class.getSimpleName(), bootstrapServers, instrumentationPortOffset++));
         instrumentationThroughput.start();
     }
 
     private int paymentsPortOffset = 20000;
 
     private void startPaymentPipeline(Controllable pauseController) {
-        paymentsInFlight = new PaymentsInFlight(PaymentProperties.paymentsIncomingTopic, PaymentProperties.paymentsInflightTopic, PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(bootstrapServers, paymentsPortOffset++), pauseController);
+        paymentsInFlight = new PaymentsInFlight(PaymentProperties.paymentsIncomingTopic, PaymentProperties.paymentsInflightTopic, PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(PaymentsInFlight.class.getSimpleName(), bootstrapServers, paymentsPortOffset++), pauseController);
         paymentsInFlight.start();
 
-        paymentAccountProcessor = new AccountProcessor(PaymentProperties.paymentsInflightTopic, PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(bootstrapServers, paymentsPortOffset++));
+        paymentAccountProcessor = new AccountProcessor(PaymentProperties.paymentsInflightTopic, PaymentProperties.paymentsCompleteTopic, PaymentProperties.get(AccountProcessor.class.getSimpleName(), bootstrapServers, paymentsPortOffset++));
         paymentAccountProcessor.start();
 
-        paymentsConfirmed = new PaymentsConfirmed(PaymentProperties.paymentsCompleteTopic, PaymentProperties.paymentsConfirmedTopic, PaymentProperties.get(bootstrapServers, paymentsPortOffset++));
+        paymentsConfirmed = new PaymentsConfirmed(PaymentProperties.paymentsCompleteTopic, PaymentProperties.paymentsConfirmedTopic, PaymentProperties.get(PaymentsConfirmed.class.getSimpleName(), bootstrapServers, paymentsPortOffset++));
         paymentsConfirmed.start();
     }
 
@@ -136,6 +147,15 @@ public class KPayAllInOneImpl implements KPay {
         return "shutdown processors complete";
     }
 
+    //https://github.com/Landoop/lenses-topology-example/blob/a82ab5fe00922d53203ef6afc31b60dc83998736/lenses-topology-example-microservice/src/main/java/io/lenses/topology/example/microservice/S3StorageService.java#L59
+    private TopologyClient createTopology(Properties properties, KafkaProducer<String, Payment> producer, String topic) {
+        try {
+            return MicroserviceTopology.fromProducer("PaymentGenerator", producer, Collections.singletonList(topic), properties);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
     @Override
     public void generatePayments(final int ratePerSecond) {
@@ -143,6 +163,7 @@ public class KPayAllInOneImpl implements KPay {
         KafkaProducer<String, Payment> producer =
                 new KafkaProducer<>(properties(), new StringSerializer(), new Payment.Serde().serializer());
 
+        createTopology(properties(), producer, PaymentProperties.paymentsIncomingTopic);
         ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         paymentRunnable = new PaymentRunnable() {
 

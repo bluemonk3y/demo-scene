@@ -49,6 +49,7 @@ public class IntegrationTestHarness {
   private KafkaTopicClient topicClient;
   Map<String, Object> configMap = new HashMap<>();
   String CONSUMER_GROUP_ID_PREFIX = "KWQ-test";
+  private String bootstrapServer;
 
   public void start() throws Exception {
     embeddedKafkaCluster = new EmbeddedSingleNodeKafkaCluster();
@@ -65,10 +66,24 @@ public class IntegrationTestHarness {
     this.topicClient = new KafkaTopicClientImpl(adminClient);
   }
 
+  public void start(String bootstrapServer) throws Exception {
+    this.bootstrapServer = bootstrapServer;
+
+    configMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+    configMap.put("application.id", "KWQ");
+    configMap.put("commit.interval.ms", 0);
+    configMap.put("cache.max.bytes.buffering", 0);
+    configMap.put("auto.offset.reset", "earliest");
+    configMap.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+
+    this.adminClient = AdminClient.create(configMap);
+    this.topicClient = new KafkaTopicClientImpl(adminClient);
+  }
+
   public void stop() {
     this.topicClient.close();
     this.adminClient.close();
-    this.embeddedKafkaCluster.stop();
+    if (this.embeddedKafkaCluster != null) this.embeddedKafkaCluster.stop();
   }
 
   public <V> void produceData(String topicName,
@@ -150,5 +165,9 @@ public class IntegrationTestHarness {
 
   public KafkaTopicClient getTopicClient() {
     return topicClient;
+  }
+
+  public String bootstrapServers() {
+    return bootstrapServer != null ? bootstrapServer : embeddedKafkaCluster.bootstrapServers();
   }
 }

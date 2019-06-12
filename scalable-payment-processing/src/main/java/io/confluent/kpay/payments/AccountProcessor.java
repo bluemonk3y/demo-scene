@@ -1,16 +1,27 @@
 package io.confluent.kpay.payments;
 
+import com.landoop.lenses.topology.client.AppType;
+import com.landoop.lenses.topology.client.Representation;
+import com.landoop.lenses.topology.client.TopologyBuilder;
+import com.landoop.lenses.topology.client.TopologyClient;
+import com.landoop.lenses.topology.client.kafka.metrics.KafkaTopologyClient;
+import com.landoop.lenses.topology.client.kafka.metrics.TopologyKafkaStreamsClientSupplier;
 import io.confluent.kpay.payments.model.AccountBalance;
 import io.confluent.kpay.payments.model.Payment;
 import io.confluent.kpay.rest_iq.KTableResourceEndpoint;
 import io.confluent.kpay.rest_iq.KVStoreProvider;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -18,6 +29,7 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Properties;
 
@@ -27,6 +39,7 @@ public class AccountProcessor {
     private final Topology topology;
 
     private static final Logger log = LoggerFactory.getLogger(AccountProcessor.class);
+    private final TopologyKafkaStreamsClientSupplier lensesTopologyClient;
 
     private Properties streamsConfig;
     private KafkaStreams streams;
@@ -82,19 +95,46 @@ public class AccountProcessor {
         branch[1].to(paymentsCompleteTopic);
 
         topology = builder.build();
+        lensesTopologyClient = createTopology(streamsConfig, paymentsInflightTopic, paymentsCompleteTopic, topology);
+
     }
     public Topology getTopology() {
         return topology;
     }
 
     public void start() {
-        streams = new KafkaStreams(topology, streamsConfig);
+        streams = new KafkaStreams(topology, streamsConfig, lensesTopologyClient);
         streams.start();
 
         log.info(topology.describe().toString());
 
         microRestService = new KTableResourceEndpoint<String, AccountBalance>(new KVStoreProvider<>(streams, accountBalanceKTable)){};
         microRestService.start(streamsConfig);
+    }
+
+    private TopologyKafkaStreamsClientSupplier createTopology(Properties streamsConfig, String paymentsInflightTopic, String outputTopic, Topology topology) {
+
+        Properties topologyProps = new Properties();
+        topologyProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, streamsConfig.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        TopologyClient client = KafkaTopologyClient.create(topologyProps);
+        com.landoop.lenses.topology.client.Topology lensesTopology = TopologyBuilder.start(AppType.KafkaStreams, getClass().getCanonicalName())
+                .withTopic(paymentsInflightTopic)
+                .withDescription("Inflight Payments")
+                .withRepresentation(Representation.STREAM)
+                .endNode()
+                .withTopic(outputTopic)
+                .withParent(paymentsInflightTopic)
+                .withDescription("Send to complete topic")
+                .withRepresentation(Representation.STREAM)
+                .endNode()
+                .build();
+
+        try {
+            client.register(lensesTopology);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new TopologyKafkaStreamsClientSupplier(client, lensesTopology);
     }
 
     public void stop() {

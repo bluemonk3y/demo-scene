@@ -1,10 +1,11 @@
 package io.confluent.kpay.util;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.streams.StreamsConfig;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.streams.StreamsConfig;
 
 public class PropertiesGetter {
 
@@ -12,9 +13,9 @@ public class PropertiesGetter {
     private static String thisIpAddress = getIpAddress();
 
 
-    public static Properties getProperties(String broker, String keySerdesClass, String valueSerdesClass) {
+    public static Properties getProperties(String appName, String broker, String keySerdesClass, String valueSerdesClass) {
         Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "TEST-APP-ID-" + instanceId++);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appName + "-ID-" + instanceId++);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, keySerdesClass);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, valueSerdesClass);

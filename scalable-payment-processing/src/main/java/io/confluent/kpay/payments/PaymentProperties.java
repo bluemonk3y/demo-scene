@@ -3,9 +3,10 @@ package io.confluent.kpay.payments;
 import io.confluent.kpay.payments.model.Payment;
 import io.confluent.kpay.util.KafkaTopicClient;
 import io.confluent.kpay.util.PropertiesGetter;
-import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
+
+import java.util.Properties;
 
 public class PaymentProperties {
     final static int partitionCount = 5;
@@ -17,8 +18,8 @@ public class PaymentProperties {
     final static public String paymentsConfirmedTopic = "kpay.payments.confirmed";
 
 
-    public static Properties get(String broker, int portOffset) {
-        Properties properties = PropertiesGetter.getProperties(broker, Serdes.String().getClass().getName(), Payment.Serde.class.getName());
+    public static Properties get(String appName, String broker, int portOffset) {
+        Properties properties = PropertiesGetter.getProperties(appName, broker, Serdes.String().getClass().getName(), Payment.Serde.class.getName());
         // payment processors startProcessors from 20000
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, PropertiesGetter.getIpAddress() + ":" + portOffset);
         System.out.println(" APP PORT:" + properties.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
