@@ -1,6 +1,5 @@
 package io.confluent.kpay;
 
-import com.landoop.lenses.topology.client.TopologyClient;
 import com.landoop.lenses.topology.client.kafka.metrics.MicroserviceTopology;
 import io.confluent.common.utils.TestUtils;
 import io.confluent.kpay.control.ControlProperties;
@@ -16,6 +15,7 @@ import io.confluent.kpay.payments.PaymentsInFlight;
 import io.confluent.kpay.payments.model.AccountBalance;
 import io.confluent.kpay.payments.model.ConfirmedStats;
 import io.confluent.kpay.payments.model.InflightStats;
+import io.confluent.kpay.payments.model.Meta;
 import io.confluent.kpay.payments.model.Payment;
 import io.confluent.kpay.rest_iq.KTableResourceEndpoint;
 import io.confluent.kpay.rest_iq.WindowKTableResourceEndpoint;
@@ -48,6 +48,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.sort;
@@ -148,12 +149,11 @@ public class KPayAllInOneImpl implements KPay {
     }
 
     //https://github.com/Landoop/lenses-topology-example/blob/a82ab5fe00922d53203ef6afc31b60dc83998736/lenses-topology-example-microservice/src/main/java/io/lenses/topology/example/microservice/S3StorageService.java#L59
-    private TopologyClient createTopology(Properties properties, KafkaProducer<String, Payment> producer, String topic) {
+    private void createTopology(String sourceName, Properties properties, KafkaProducer<?, ?> producer, String topic) {
         try {
-            return MicroserviceTopology.fromProducer("PaymentGenerator", producer, Collections.singletonList(topic), properties);
+            MicroserviceTopology.fromProducer(sourceName, producer, Collections.singletonList(topic), properties);
         } catch (IOException e) {
             e.printStackTrace();
-            return null;
         }
     }
 
@@ -163,22 +163,34 @@ public class KPayAllInOneImpl implements KPay {
         KafkaProducer<String, Payment> producer =
                 new KafkaProducer<>(properties(), new StringSerializer(), new Payment.Serde().serializer());
 
-        createTopology(properties(), producer, PaymentProperties.paymentsIncomingTopic);
+        createTopology("kpay.payments.PaymentGenerator", properties(), producer, PaymentProperties.paymentsIncomingTopic);
+
+        KafkaProducer<String, Meta> metaProducer =
+                new KafkaProducer<>(properties(), new StringSerializer(), new Meta.Serde().serializer());
+
+        createTopology("kpay.payments.MetaGenerator", properties(), metaProducer, "kpay.payment.meta");
+
+
         ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+        final String header = "pay1-";
+
+
         paymentRunnable = new PaymentRunnable() {
 
-            int position;
-            String[] from = new String[]{"larry", "joe", "mary", "bob"};
-            String[] to = new String[]{"allan", "alex", "adrian", "ally"};
+            AtomicInteger position = new AtomicInteger();
+            String[] from = new String[]{"larry", "joe", "bob", "moe", "joshua", "harry"};
+            String[] to = new String[]{"ali", "jen", "lu", "issy", "sophia", "mary"};
 
             @Override
             public void run() {
 
                 try {
-                    Payment payment = new Payment("pay-" + System.currentTimeMillis(), System.currentTimeMillis() + "", from[position % from.length], to[position % from.length], new BigDecimal(Math.round((Math.random() * 100.0)*100.0)/100.0), Payment.State.incoming, System.currentTimeMillis() );
+                    long time = System.currentTimeMillis();
+                    Payment payment = new Payment(header + position, position.toString(), from[position.get() % from.length], to[position.get() % from.length], new BigDecimal(Math.round((Math.random() * 100.0) * 100.0) / 100.0), Payment.State.incoming, time);
                     log.info("Send:" + payment);
-                    producer.send(buildRecord(PaymentProperties.paymentsIncomingTopic, System.currentTimeMillis(), payment.getId(), payment));
-                    position++;
+                    producer.send(buildRecord(PaymentProperties.paymentsIncomingTopic, time, payment.getId(), payment));
+                    metaProducer.send(new ProducerRecord<String, Meta>("kpay.payment.meta", payment.getTxnId(), new Meta(payment.getTxnId(), position.toString(), "username is " + payment.getFrom())));
+                    position.incrementAndGet();
                     producer.flush();
                 } catch (Throwable t) {
                     t.printStackTrace();

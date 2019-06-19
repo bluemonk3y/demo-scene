@@ -15,11 +15,11 @@ public class PropertiesGetter {
 
     public static Properties getProperties(String appName, String broker, String keySerdesClass, String valueSerdesClass) {
         Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appName + "-ID-" + instanceId++);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "kpay." + appName + "-ID-" + instanceId++);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, keySerdesClass);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, valueSerdesClass);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest ");
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
         return props;
     }
