@@ -4,6 +4,8 @@ import io.confluent.kpay.util.JsonDeserializer;
 import io.confluent.kpay.util.JsonSerializer;
 import io.confluent.kpay.util.WrapperSerde;
 
+import java.math.BigDecimal;
+
 
 /**
  *
@@ -13,16 +15,16 @@ public class Meta {
   private String id;
   private String txnId;
   private String userInfo;
+  private BigDecimal amount;
 
   public Meta() {
   }
 
-  ;
-
-  public Meta(String txnId, String id, String userInfo) {
+  public Meta(String txnId, String id, String userInfo, BigDecimal amount) {
     this.txnId = txnId;
     this.id = id;
     this.userInfo = userInfo;
+    this.amount = amount;
   }
 
   public String getId() {
@@ -47,6 +49,14 @@ public class Meta {
 
   public void setUserInfo(String userInfo) {
     this.userInfo = userInfo;
+  }
+
+  public BigDecimal getAmount() {
+    return amount;
+  }
+
+  public void setAmount(BigDecimal amount) {
+    this.amount = amount;
   }
 
   static public final class Serde extends WrapperSerde<Meta> {

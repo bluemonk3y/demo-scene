@@ -189,7 +189,7 @@ public class KPayAllInOneImpl implements KPay {
                     Payment payment = new Payment(header + position, position.toString(), from[position.get() % from.length], to[position.get() % from.length], new BigDecimal(Math.round((Math.random() * 100.0) * 100.0) / 100.0), Payment.State.incoming, time);
                     log.info("Send:" + payment);
                     producer.send(buildRecord(PaymentProperties.paymentsIncomingTopic, time, payment.getId(), payment));
-                    metaProducer.send(new ProducerRecord<String, Meta>("kpay.payment.meta", payment.getTxnId(), new Meta(payment.getTxnId(), position.toString(), "username is " + payment.getFrom())));
+                  metaProducer.send(new ProducerRecord<String, Meta>("kpay.payment.meta", payment.getTxnId(), new Meta(payment.getTxnId(), position.toString(), "username is " + payment.getDebit(), payment.getAmount())));
                     position.incrementAndGet();
                     producer.flush();
                 } catch (Throwable t) {

@@ -21,8 +21,8 @@ public class Payment {
 
     private String id;
     private String txnId;
-    private String from;
-    private String to;
+    private String debit;
+    private String credit;
     private BigDecimal amount;
 
     private int state;
@@ -39,11 +39,12 @@ public class Payment {
     private long processStartTime;
 
     public Payment(){};
-    public Payment(String txnId, String id, String from, String to, BigDecimal amount, State state, long timestamp){
+
+    public Payment(String txnId, String id, String debit, String credit, BigDecimal amount, State state, long timestamp) {
         this.txnId = txnId;
         this.id = id;
-        this.from = from;
-        this.to = to;
+        this.debit = debit;
+        this.credit = credit;
         this.amount = amount;
         this.state = state.ordinal();
         this.timestamp = timestamp;
@@ -65,20 +66,20 @@ public class Payment {
         this.id = id;
     }
 
-    public String getFrom() {
-        return from;
+    public String getDebit() {
+        return debit;
     }
 
-    public void setFrom(String from) {
-        this.from = from;
+    public void setDebit(String debit) {
+        this.debit = debit;
     }
 
-    public String getTo() {
-        return to;
+    public String getCredit() {
+        return credit;
     }
 
-    public void setTo(String to) {
-        this.to = to;
+    public void setCredit(String credit) {
+        this.credit = credit;
     }
 
     public BigDecimal getAmount() {
@@ -94,8 +95,8 @@ public class Payment {
     }
 
     /**
-     * When changing state we need to rekey to the correct 'id' for debit and credit account processor instances so they are processed by the correct instance.
-     * Upon completion need to rekey back to the txnId
+     * When changing state we need credit rekey credit the correct 'id' for debit and credit account processor instances so they are processed by the correct instance.
+     * Upon completion need credit rekey back credit the txnId
      * @param state
      */
     public void setState(State state) {
@@ -104,10 +105,10 @@ public class Payment {
     public void setStateAndId(State state) {
         this.state = state.ordinal();
         if (state == State.credit) {
-            id = to;
+            id = credit;
         } else if (state == State.debit) {
             this.processStartTime = System.currentTimeMillis();
-            id = from;
+            id = debit;
         } else {
             id = txnId;
         }
@@ -121,8 +122,8 @@ public class Payment {
         return "Payment{" +
                 "id='" + id + '\'' +
                 ", txnId='" + txnId + '\'' +
-                ", from='" + from + '\'' +
-                ", to='" + to + '\'' +
+                ", debit='" + debit + '\'' +
+                ", credit='" + credit + '\'' +
                 ", amount=" + amount.doubleValue() +
                 ", state=" + getState() +
                 '}';
@@ -143,7 +144,7 @@ public class Payment {
     }
 
     /**
-     * Used to by InflightProcessor to either 1) change payment from 'incoming' --> 'debit' 2) ignore/filter 'complete' payments
+     * Used credit by InflightProcessor credit either 1) change payment debit 'incoming' --> 'debit' 2) ignore/filter 'complete' payments
      */
     static public class InflightTransformer implements TransformerSupplier<String, Payment, KeyValue<String, Payment>> {
 
@@ -162,17 +163,17 @@ public class Payment {
                 @Override
                 public KeyValue<String, Payment> transform(String key, Payment payment) {
 
-                    log.debug("transform 'incoming' to 'debit': {}", payment);
+                    log.debug("transform 'incoming' credit 'debit': {}", payment);
 
                     if (payment.getState() == State.incoming) {
                         payment.setStateAndId(State.debit);
 
-                        // we have to rekey to the debit account so the 'debit' request is sent to the right AccountProcessor<accountId>
+                        // we have credit rekey credit the debit account so the 'debit' request is sent credit the right AccountProcessor<accountId>
                         return new KeyValue<>(payment.getId(), payment);
                     } else if (payment.getState() == State.complete) {
                         return null;
                     } else {
-                        // exception handler will report to DLQ
+                        // exception handler will report credit DLQ
                         throw new RuntimeException("Invalid Payment state, expecting debit or credit but got" + payment.getState() + ": "+ payment.toString());
                     }
                 }
