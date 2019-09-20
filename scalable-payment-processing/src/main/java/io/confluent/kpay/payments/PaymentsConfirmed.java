@@ -1,16 +1,9 @@
 package io.confluent.kpay.payments;
 
-import com.landoop.lenses.topology.client.AppType;
-import com.landoop.lenses.topology.client.Representation;
-import com.landoop.lenses.topology.client.TopologyBuilder;
-import com.landoop.lenses.topology.client.TopologyClient;
-import com.landoop.lenses.topology.client.kafka.metrics.KafkaTopologyClient;
-import com.landoop.lenses.topology.client.kafka.metrics.TopologyKafkaStreamsClientSupplier;
 import io.confluent.kpay.payments.model.ConfirmedStats;
 import io.confluent.kpay.payments.model.Payment;
 import io.confluent.kpay.rest_iq.WindowKTableResourceEndpoint;
 import io.confluent.kpay.rest_iq.WindowKVStoreProvider;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -31,13 +24,11 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Properties;
 
 public class PaymentsConfirmed {
     public static final String STORE_NAME = "confirmed";
-    private final TopologyKafkaStreamsClientSupplier lensesTopologyClient;
     long ONE_DAY = 24 * 60 * 60 * 1000L;
 
     private static final Logger log = LoggerFactory.getLogger(PaymentsConfirmed.class);
@@ -77,7 +68,6 @@ public class PaymentsConfirmed {
                 );
 
         topology = builder.build();
-        lensesTopologyClient = createTopology(streamsConfig, paymentsCompleteTopic, paymentsConfirmedTopic, topology);
 
     }
     public Topology getTopology() {
@@ -85,7 +75,7 @@ public class PaymentsConfirmed {
     }
 
     public void start() {
-        streams = new KafkaStreams(topology, streamsConfig, lensesTopologyClient);
+        streams = new KafkaStreams(topology, streamsConfig);
         streams.start();
 
         log.info(topology.describe().toString());
@@ -93,31 +83,6 @@ public class PaymentsConfirmed {
         microRestService = new WindowKTableResourceEndpoint<String, ConfirmedStats>(new WindowKVStoreProvider<>(streams, confirmedKTable)) {
         };
         microRestService.start(streamsConfig);
-    }
-
-    private TopologyKafkaStreamsClientSupplier createTopology(Properties streamsConfig, String paymentsInflightTopic, String outputTopic, Topology topology) {
-
-        Properties topologyProps = new Properties();
-        topologyProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, streamsConfig.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        TopologyClient client = KafkaTopologyClient.create(topologyProps);
-        com.landoop.lenses.topology.client.Topology lensesTopology = TopologyBuilder.start(AppType.KafkaStreams, getClass().getCanonicalName())
-                .withTopic(paymentsInflightTopic)
-                .withDescription("Inflight Payments")
-                .withRepresentation(Representation.STREAM)
-                .endNode()
-                .withTopic(outputTopic)
-                .withParent(paymentsInflightTopic)
-                .withDescription("Send to complete topic")
-                .withRepresentation(Representation.STREAM)
-                .endNode()
-                .build();
-
-        try {
-            client.register(lensesTopology);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return new TopologyKafkaStreamsClientSupplier(client, lensesTopology);
     }
 
     public void stop() {

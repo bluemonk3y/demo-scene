@@ -1,6 +1,5 @@
 package io.confluent.kpay;
 
-import com.landoop.lenses.topology.client.kafka.metrics.MicroserviceTopology;
 import io.confluent.common.utils.TestUtils;
 import io.confluent.kpay.control.ControlProperties;
 import io.confluent.kpay.control.Controllable;
@@ -33,12 +32,10 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -148,28 +145,14 @@ public class KPayAllInOneImpl implements KPay {
         return "shutdown processors complete";
     }
 
-    //https://github.com/Landoop/lenses-topology-example/blob/a82ab5fe00922d53203ef6afc31b60dc83998736/lenses-topology-example-microservice/src/main/java/io/lenses/topology/example/microservice/S3StorageService.java#L59
-    private void createTopology(String sourceName, Properties properties, KafkaProducer<?, ?> producer, String topic) {
-        try {
-            MicroserviceTopology.fromProducer(sourceName, producer, Collections.singletonList(topic), properties);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     @Override
     public void generatePayments(final int ratePerSecond) {
 
         KafkaProducer<String, Payment> producer =
                 new KafkaProducer<>(properties(), new StringSerializer(), new Payment.Serde().serializer());
 
-        createTopology("kpay.payments.PaymentGenerator", properties(), producer, PaymentProperties.paymentsIncomingTopic);
-
         KafkaProducer<String, Meta> metaProducer =
                 new KafkaProducer<>(properties(), new StringSerializer(), new Meta.Serde().serializer());
-
-        createTopology("kpay.payments.MetaGenerator", properties(), metaProducer, "kpay.payment.meta");
-
 
         ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         final String header = "pay1-";

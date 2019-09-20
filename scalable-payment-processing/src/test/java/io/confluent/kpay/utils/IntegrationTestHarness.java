@@ -70,7 +70,7 @@ public class IntegrationTestHarness {
     this.bootstrapServer = bootstrapServer;
 
     configMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-    configMap.put("application.id", "KWQ");
+    configMap.put("application.id", "KPAY");
     configMap.put("commit.interval.ms", 0);
     configMap.put("cache.max.bytes.buffering", 0);
     configMap.put("auto.offset.reset", "earliest");
@@ -92,7 +92,7 @@ public class IntegrationTestHarness {
                               Long timestamp)
           throws InterruptedException, TimeoutException, ExecutionException {
 
-    createTopic(topicName, 1, 1);
+    createTopic(topicName, 2, 1);
 
     Properties producerConfig = properties();
     KafkaProducer<String, V> producer =
@@ -103,6 +103,7 @@ public class IntegrationTestHarness {
       Future<RecordMetadata> recordMetadataFuture = producer.send(buildRecord(topicName, timestamp, recordEntry));
       result.put(recordEntry.getKey(), recordMetadataFuture.get(TEST_RECORD_FUTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS));
     }
+    System.out.printf("result:" + result);
     producer.close();
 
   }
